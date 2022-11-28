@@ -3,7 +3,6 @@ const fs = require('fs');
 const path = require('path');
 const express = require('express');
 const cors = require('cors');
-const { get } = require('http');
 
 const app = express();
 
@@ -42,6 +41,7 @@ async function postfunc(func, params) {
         // Submit the specified transaction.
         // createCar transaction - requires 5 argument, ex: ('createCar', 'CAR12', 'Honda', 'Accord', 'Black', 'Tom')
         // changeCarOwner transaction - requires 2 args , ex: ('changeCarOwner', 'CAR12', 'Dave')
+        console.log(...params);
         const result = await contract.submitTransaction(func, ...params);
         console.log('Transaction has been submitted');
 
@@ -100,21 +100,19 @@ async function getfunc(func,params) {
     }
 }
 
-app.get('/', (req,res) => {
-    console.log("yanis krut)")
-    return res.status(200).json({message: "yanis kek"});
-})
-
-app.post('/postfunc', (req,res) => {
-    const {func, params} = req.body;
-    const result = postfunc(func, params);
+app.post('/callFunc', async (req,res) => {
+    const {type, func, params} = req.body;
+    let result;
+    if(type==="POST"){
+        result = await postfunc(func,params);
+    }else{
+        result = await getfunc(func, params);
+    }
     return res.status(200).json(JSON.parse(result.toString()));
 })
 
-app.post('/getfunc', async (req,res) => {
-    const {func, params} = req.body;
-    const result = await getfunc(func, params)
-    throw new Error("loh");
+app.get('/yanis', async (req, res) => {
+    let result = await getfunc('yanis', []);
     return res.status(200).json(JSON.parse(result.toString()));
 })
 
