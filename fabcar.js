@@ -463,7 +463,7 @@ class FabCar extends Contract {
                     "status": false,
                     "deliveryTemperature": [5, 2, 3, 5, 1],
                 }
-            ],
+            ]
 
         }
 
@@ -488,7 +488,7 @@ class FabCar extends Contract {
         }
         return result;
     }
-    
+
     async checkTemperatureOut(ctx, index) {
         let products = JSON.parse((await ctx.stub.getState('products')).toString());
         let deliveryRequests = JSON.parse((await ctx.stub.getState('deliveryRequests')).toString());
@@ -528,7 +528,7 @@ class FabCar extends Contract {
         const deliveryRequests = JSON.parse((await ctx.stub.getState('deliveryRequests')).toString());
         const index = deliveryRequests.findIndex((el) => el.shopId == shopId);
         console.log(deliveryRequests);
-        if(index == -1){
+        if (index == -1) {
             return JSON.stringify("Shop not found");
         }
         const request = deliveryRequests[index];
@@ -570,7 +570,7 @@ class FabCar extends Contract {
         return rate;
     }
 
-    async requestDelivery(ctx, shopId, title, count){
+    async requestDelivery(ctx, shopId, title, count) {
         let products = JSON.parse((await ctx.stub.getState('products')).toString());
         let deliveryRequests = JSON.parse((await ctx.stub.getState('deliveryRequests')).toString());
         let shops = JSON.parse((await ctx.stub.getState('shops')).toString());
@@ -589,11 +589,12 @@ class FabCar extends Contract {
         return JSON.stringify("Shop not found");
     }
 
-    async acceptPrice(ctx, solution, shopId){
-        const deliveryRequests = JSON.parse((await ctx.stub.getState('deliveryRequests')).toString());
-        const index = deliveryRequests.findIndex((el) => el.shopId == shopId);
+    async acceptPrice(ctx, solution, shopId) {
+        let deliveryRequests = JSON.parse((await ctx.stub.getState('deliveryRequests')).toString());
         let products = JSON.parse((await ctx.stub.getState('products')).toString());
+        const index = deliveryRequests.findIndex((el) => el.shopId == shopId);
         const product = products.find((el) => el.title == deliveryRequests[index].title);
+
         if (index == -1) {
             return JSON.stringify("Request not found");
         }
@@ -601,7 +602,7 @@ class FabCar extends Contract {
             deliveryRequests[index].status = solution;
             for (let i = 0; i < 5; i++) {
                 let temperature = Math.floor(Math.random() * (product.maxTemperature - product.minTemperature + 1) + product.minTemperature)
-                deliveryRequests[idx].deliveryTemperature.push(temperature);
+                deliveryRequests[index].deliveryTemperature.push(temperature);
             }
             await ctx.stub.putState('deliveryRequests', Buffer.from(JSON.stringify(deliveryRequests)))
             return JSON.stringify("Price accepted");
@@ -610,8 +611,141 @@ class FabCar extends Contract {
             await ctx.stub.putState('deliveryRequests', Buffer.from(JSON.stringify(deliveryRequests)))
             return JSON.stringify("Price canceled");
         }
-        
+
     }
 
+    async acceptDelivery(ctx, solution, shopId) {
+        let deliveryRequests = JSON.parse((await ctx.stub.getState('deliveryRequests')).toString());
+        let products = JSON.parse((await ctx.stub.getState('products')).toString());
+        let shops = JSON.parse((await ctx.stub.getState('shops')).toString());
+        let users = JSON.parse((await ctx.stub.getState('users')).toString());
+        const index = deliveryRequests.findIndex((el) => el.shopId == shopId);
+        const shopIndex = shops.findIndex((el) => el.id == shopId);
+        const user = users.findIndex((el) => el.login == shops[shopIndex].login);
+        const vendor = users.findIndex((el) => el.login == "goldfish");
+        const productIndex = products.findIndex((el) => el.title == deliveryRequests[index].title)
+        if (index == -1) {
+            return JSON.stringify("Request not found")
+        }
+        let counter = this.checkTemperatureOut(index);
+        if (counter == 0) {
+            if (transfer(user, vendor, deliveryRequests[index].price)) {
+                shops[shopIndex].products.push({ ...products[productIndex], "price": products[productIndex].price += products[productIndex].price * 0.5, "count": deliveryRequests[index].count });
+                deliveryRequests.splice(index, 1);
+                await ctx.stub.putState('shops', Buffer.from(JSON.stringify(shops)))
+                await ctx.stub.putState('deliveryRequests', Buffer.from(JSON.stringify(deliveryRequests)))
+                return JSON.stringify("Delivery accepted because counter = 0")
+            } else {
+                return JSON.stringify("Not enough money")
+            }
+        } else if (solution) {
+            if (transfer(user, vendor, deliveryRequests[index].price)) {
+                shops[shopIndex].products.push({ ...products[productIndex], "price": products[productIndex].price += products[productIndex].price * 0.5, "count": deliveryRequests[index].count });
+                deliveryRequests.splice(index, 1);
+                await ctx.stub.putState('shops', Buffer.from(JSON.stringify(shops)))
+                await ctx.stub.putState('deliveryRequests', Buffer.from(JSON.stringify(deliveryRequests)))
+                return JSON.stringify("Delivery accepted")
+            } else {
+                return JSON.stringify("Not enough money")
+            }
+        } else {
+            deliveryRequests.splice(index, 1);
+            await ctx.stub.putState('deliveryRequests', Buffer.from(JSON.stringify(deliveryRequests)))
+            return JSON.stringify("Delivery canceled");
+        }
+    }
+
+    async orderProduct(ctx, login, shopId, title, count) {
+        let products = JSON.parse((await ctx.stub.getState('products')).toString());
+        let shops = JSON.parse((await ctx.stub.getState('shops')).toString());
+        const index = products.findIndex((el) => el.title == title);
+        const shopIndex = shops.findIndex((el) => el.id == shopId);
+        const productPrice = products[index].price;
+        if (index == -1 || shopIndex == -1) {
+            return JSON.stringify("Product or shop not found");
+        }
+        const id = shops[shopIndex].orders.length + 1;
+        shops[shopIndex].orders.push({ id, "customer": login, "product": title, count, "price": count * productPrice, "status": false });
+        await ctx.stub.putState('shops', Buffer.from(JSON.stringify(shops)));
+        return JSON.stringify("Order created");
+    }
+
+    async acceptOrder(ctx, orderId, shopId) {
+        let shops = JSON.parse((await ctx.stub.getState('shops')).toString());
+        let users = JSON.parse((await ctx.stub.getState('users')).toString());
+        const shopIndex = shops.findIndex((el) => el.id == shopId);
+        const orderIndex = shops[shopIndex].orders.findIndex((el) => el.id == orderId);
+        const userIndex = users.findIndex((el) => el.login == shops[shopIndex].orders[orderIndex].customer);
+        const indexShopUser = users.findIndex((el) => el.login == shops[shopIndex].login);
+        const price = shops[shopIndex].orders[orderIndex].price
+        const productIndex = shops[shopIndex].products.findIndex((el) => el.title == order.product);
+        if (shopIndex == -1 || orderIndex == -1) {
+            return JSON.stringify("Order or shop not found");
+        }
+        if (solution && transfer(userIndex, indexShopUser, price)) {
+            shops[shopIndex].orders[orderIndex].status = true;
+            shops[shopIndex].products[productIndex].count -= shops[shopIndex].orders[orderIndex].count;
+            await ctx.stub.putState('shops', Buffer.from(JSON.stringify(shops)));
+            return JSON.stringify("Success sell");
+        } else {
+            shops[shopIndex].orders.splice(orderIndex, 1);
+            await ctx.stub.putState('shops', Buffer.from(JSON.stringify(shops)));
+            return JSON.stringify("Sell canceled or not enough money")
+        }
+    }
+
+    async cancelOrder(ctx, orderId, login, shopId) {
+        let shops = JSON.parse((await ctx.stub.getState('shops')).toString());
+        const shopIndex = shops.findIndex((el) => el.id == shopId);
+        const orderIndex = shops[shopIndex].orders.findIndex((el) => el.id == orderId);
+        if (shopIndex == -1 || orderIndex == -1 || shops[shopIndex].orders[orderIndex].customer != login) {
+            return JSON.stringify("Order or shop not found or you are not customer");
+        }
+        if (shops[shopIndex].orders[orderIndex].status == false) {
+            shops[shopIndex].orders.splice(orderIndex, 1);
+            await ctx.stub.putState('shops', Buffer.from(JSON.stringify(shops)));
+            return JSON.stringify("Success cancel order");
+        } else {
+            return JSON.stringify("Order has been approved by seller");
+        }
+    }
+
+    async returnProduct(ctx, orderId, shopId, login) {
+        let shops = JSON.parse((await ctx.stub.getState('shops')).toString());
+        const shopIndex = shops.findIndex((el) => el.id == shopId);
+        const orderIndex = shops[shopIndex].orders.findIndex((el) => el.id == orderId);
+        if (shopIndex == -1 || orderIndex == -1 || shops[shopIndex].orders[orderIndex].customer != login) {
+            return JSON.stringify("Order or shop not found or you are not customer");
+        }
+        const id = shops[shopIndex].returns.length + 1;
+        shops[shopIndex].returns.push({ id, orderId, "status": false });
+        await ctx.stub.putState('shops', Buffer.from(JSON.stringify(shops)));
+        return JSON.stringify("Success created a request" );
+    }
+
+    async checkReturn(ctx, solution, shopId, returnId){
+        let shops = JSON.parse((await ctx.stub.getState('shops')).toString());
+        let users = JSON.parse((await ctx.stub.getState('users')).toString());
+        const shopIndex = shops.findIndex((el) => el.id == shopId);
+        const returnIndex = shops[shopIndex].returns.findIndex((el) => el.id == returnId);
+        if (shopIndex == -1 || returnIndex == -1) {
+            return JSON.stringify("Return or shop not found");
+        }
+        const order = shops[shopIndex].orders.find((el) => el.id == shops[shopIndex].returns[returnId].orderId);
+        const userIndex = users.findIndex((el) => el.login == order.customer);
+        const productIndex = shops[shopIndex].products.findIndex((el) => el.title == order.product);
+        const indexShopUser = users.findIndex((el) => el.login == shops[shopIndex].login);
+        const price = order.price;
+        if (solution && transfer(users[indexShopUser], users[userIndex], price)) {
+            shops[shopIndex].products[productIndex].count += order.count;
+            shops[shopIndex].returns[returnIndex].status = solution;
+            await ctx.stub.putState('shops', Buffer.from(JSON.stringify(shops)));
+            return JSON.stringify("Order return approved");
+        }else{
+            shops[shopIndex].returns[returnIndex].status = false;
+            await ctx.stub.putState('shops', Buffer.from(JSON.stringify(shops)));
+            return JSON.stringify("Order has been rejected");
+        }
+    }
 }
 module.exports = FabCar;
