@@ -251,9 +251,9 @@ class FabCar extends Contract {
                 "employees": ["semen"],
                 "login": "shop1",
                 "rate": 0,
-                "products": [{}],
-                "orders": [{}],
-                "returns": [{}]
+                "products": [],
+                "orders": [],
+                "returns": []
             },
             {
                 "id": 2,
@@ -261,9 +261,9 @@ class FabCar extends Contract {
                 "employees": [],
                 "login": "shop2",
                 "rate": 0,
-                "products": [{}],
-                "orders": [{}],
-                "returns": [{}]
+                "products": [],
+                "orders": [],
+                "returns": []
             },
             {
                 "id": 3,
@@ -271,9 +271,9 @@ class FabCar extends Contract {
                 "employees": ["ugin"],
                 "login": "shop3",
                 "rate": 0,
-                "products": [{}],
-                "orders": [{}],
-                "returns": [{}]
+                "products": [],
+                "orders": [],
+                "returns": []
             },
             {
                 "id": 4,
@@ -281,9 +281,9 @@ class FabCar extends Contract {
                 "employees": [],
                 "login": "shop4",
                 "rate": 0,
-                "products": [{}],
-                "orders": [{}],
-                "returns": [{}]
+                "products": [],
+                "orders": [],
+                "returns": []
             },
             {
                 "id": 5,
@@ -291,9 +291,9 @@ class FabCar extends Contract {
                 "employees": ["dima"],
                 "login": "shop5",
                 "rate": 0,
-                "products": [{}],
-                "orders": [{}],
-                "returns": [{}]
+                "products": [],
+                "orders": [],
+                "returns": []
             },
             {
                 "id": 6,
@@ -301,9 +301,9 @@ class FabCar extends Contract {
                 "employees": [],
                 "login": "shop6",
                 "rate": 0,
-                "products": [{}],
-                "orders": [{}],
-                "returns": [{}]
+                "products": [],
+                "orders": [],
+                "returns": []
             },
             {
                 "id": 7,
@@ -311,9 +311,9 @@ class FabCar extends Contract {
                 "employees": ["vasya"],
                 "login": "shop7",
                 "rate": 0,
-                "products": [{}],
-                "orders": [{}],
-                "returns": [{}]
+                "products": [],
+                "orders": [],
+                "returns": []
             },
             {
                 "id": 8,
@@ -321,9 +321,9 @@ class FabCar extends Contract {
                 "employees": ["igor"],
                 "login": "shop8",
                 "rate": 0,
-                "products": [{}],
-                "orders": [{}],
-                "returns": [{}]
+                "products": [],
+                "orders": [],
+                "returns": []
             },
             {
                 "id": 9,
@@ -331,9 +331,9 @@ class FabCar extends Contract {
                 "employees": [],
                 "login": "shop9",
                 "rate": 0,
-                "products": [{}],
-                "orders": [{}],
-                "returns": [{}]
+                "products": [],
+                "orders": [],
+                "returns": []
             }
             ],
             coms: [
@@ -456,8 +456,8 @@ class FabCar extends Contract {
             ],
             deliveryRequests: [
                 {
-                    "shopId": 2,
-                    "title": "Apple",
+                    "shopId": 1,
+                    "title": "Креветка",
                     "count": 20,
                     "price": 5,
                     "status": false,
@@ -473,7 +473,6 @@ class FabCar extends Contract {
             await ctx.stub.putState(objKeys[i], Buffer.from(JSON.stringify(info[objKeys[i]])));
         }
         const p = await ctx.stub.getState('users');
-        console.log(p);
         console.info('============= END : Initialize Ledger ===========');
     }
 
@@ -487,6 +486,18 @@ class FabCar extends Contract {
             await ctx.stub.putState('users', Buffer.from(JSON.stringify(users)));
         }
         return result;
+    }
+
+    async getUser(ctx, login){
+        let users = JSON.parse((await ctx.stub.getState('users')).toString());
+        const user = users.find((el) => el.login == login);
+        return (user);
+    }
+
+    async getShop(ctx, shopId){
+        let shops = JSON.parse((await ctx.stub.getState('shops')).toString());
+        const shop = shops.find((el) => el.id == shopId);
+        return (shop);
     }
 
     async checkTemperatureOut(ctx, index) {
@@ -589,20 +600,19 @@ class FabCar extends Contract {
         return JSON.stringify("Shop not found");
     }
 
-    async acceptPrice(ctx, solution, shopId) {
+    async acceptPrice(ctx, solution, shopId, t1,t2,t3,t4,t5,t6) {
         let deliveryRequests = JSON.parse((await ctx.stub.getState('deliveryRequests')).toString());
-        let products = JSON.parse((await ctx.stub.getState('products')).toString());
         const index = deliveryRequests.findIndex((el) => el.shopId == shopId);
-        const product = products.find((el) => el.title == deliveryRequests[index].title);
-
+        
         if (index == -1) {
             return JSON.stringify("Request not found");
         }
+        console.log(deliveryRequests);
         if (solution) {
             deliveryRequests[index].status = solution;
-            for (let i = 0; i < 5; i++) {
-                let temperature = Math.floor(Math.random() * (product.maxTemperature - product.minTemperature + 1) + product.minTemperature)
-                deliveryRequests[index].deliveryTemperature.push(temperature);
+            let temps = [t1,t2,t3,t4,t5,t6];
+            for(let i = 0; i < 6; i++){
+                deliveryRequests[index].deliveryTemperature.push(temps[i]);
             }
             await ctx.stub.putState('deliveryRequests', Buffer.from(JSON.stringify(deliveryRequests)))
             return JSON.stringify("Price accepted");
@@ -629,17 +639,17 @@ class FabCar extends Contract {
         }
         let counter = this.checkTemperatureOut(index);
         if (counter == 0) {
-            if (transfer(user, vendor, deliveryRequests[index].price)) {
+            if (this.transfer(user, vendor, deliveryRequests[index].price)) {
                 shops[shopIndex].products.push({ ...products[productIndex], "price": products[productIndex].price += products[productIndex].price * 0.5, "count": deliveryRequests[index].count });
                 deliveryRequests.splice(index, 1);
-                await ctx.stub.putState('shops', Buffer.from(JSON.stringify(shops)))
+                await ctx.stub.putState('shops', Buffer.from(JSON.stringify(shops)));
                 await ctx.stub.putState('deliveryRequests', Buffer.from(JSON.stringify(deliveryRequests)))
                 return JSON.stringify("Delivery accepted because counter = 0")
             } else {
                 return JSON.stringify("Not enough money")
             }
         } else if (solution) {
-            if (transfer(user, vendor, deliveryRequests[index].price)) {
+            if (this.transfer(user, vendor, deliveryRequests[index].price)) {
                 shops[shopIndex].products.push({ ...products[productIndex], "price": products[productIndex].price += products[productIndex].price * 0.5, "count": deliveryRequests[index].count });
                 deliveryRequests.splice(index, 1);
                 await ctx.stub.putState('shops', Buffer.from(JSON.stringify(shops)))
@@ -670,7 +680,7 @@ class FabCar extends Contract {
         return JSON.stringify("Order created");
     }
 
-    async acceptOrder(ctx, orderId, shopId) {
+    async acceptOrder(ctx, orderId, shopId, solution) {
         let shops = JSON.parse((await ctx.stub.getState('shops')).toString());
         let users = JSON.parse((await ctx.stub.getState('users')).toString());
         const shopIndex = shops.findIndex((el) => el.id == shopId);
@@ -678,12 +688,12 @@ class FabCar extends Contract {
         const userIndex = users.findIndex((el) => el.login == shops[shopIndex].orders[orderIndex].customer);
         const indexShopUser = users.findIndex((el) => el.login == shops[shopIndex].login);
         const price = shops[shopIndex].orders[orderIndex].price
-        const productIndex = shops[shopIndex].products.findIndex((el) => el.title == order.product);
+        const productIndex = shops[shopIndex].products.findIndex((el) => el.title == shops[shopIndex].orders[orderIndex].product);
         if (shopIndex == -1 || orderIndex == -1) {
             return JSON.stringify("Order or shop not found");
         }
-        if (solution && transfer(userIndex, indexShopUser, price)) {
-            shops[shopIndex].orders[orderIndex].status = true;
+        if (solution && this.transfer(userIndex, indexShopUser, price)) {
+            shops[shopIndex].orders[orderIndex].status = "Approved";
             shops[shopIndex].products[productIndex].count -= shops[shopIndex].orders[orderIndex].count;
             await ctx.stub.putState('shops', Buffer.from(JSON.stringify(shops)));
             return JSON.stringify("Success sell");
@@ -701,11 +711,11 @@ class FabCar extends Contract {
         if (shopIndex == -1 || orderIndex == -1 || shops[shopIndex].orders[orderIndex].customer != login) {
             return JSON.stringify("Order or shop not found or you are not customer");
         }
-        if (shops[shopIndex].orders[orderIndex].status == false) {
+        if (shops[shopIndex].orders[orderIndex].status == "Approved") {
             shops[shopIndex].orders.splice(orderIndex, 1);
             await ctx.stub.putState('shops', Buffer.from(JSON.stringify(shops)));
             return JSON.stringify("Success cancel order");
-        } else {
+        }else{
             return JSON.stringify("Order has been approved by seller");
         }
     }
@@ -731,18 +741,18 @@ class FabCar extends Contract {
         if (shopIndex == -1 || returnIndex == -1) {
             return JSON.stringify("Return or shop not found");
         }
-        const order = shops[shopIndex].orders.find((el) => el.id == shops[shopIndex].returns[returnId].orderId);
+        const order = shops[shopIndex].orders.find((el) => el.id == shops[shopIndex].returns[returnIndex].orderId);
         const userIndex = users.findIndex((el) => el.login == order.customer);
         const productIndex = shops[shopIndex].products.findIndex((el) => el.title == order.product);
         const indexShopUser = users.findIndex((el) => el.login == shops[shopIndex].login);
         const price = order.price;
-        if (solution && transfer(users[indexShopUser], users[userIndex], price)) {
+        if (solution && this.transfer(users[indexShopUser], users[userIndex], price)) {
             shops[shopIndex].products[productIndex].count += order.count;
-            shops[shopIndex].returns[returnIndex].status = solution;
+            shops[shopIndex].returns.splice(returnIndex,1);
             await ctx.stub.putState('shops', Buffer.from(JSON.stringify(shops)));
             return JSON.stringify("Order return approved");
         }else{
-            shops[shopIndex].returns[returnIndex].status = false;
+            shops[shopIndex].returns.splice(returnIndex,1);
             await ctx.stub.putState('shops', Buffer.from(JSON.stringify(shops)));
             return JSON.stringify("Order has been rejected");
         }
