@@ -104,6 +104,13 @@ app.post('/callFunc', async (req,res) => {
     const {type, func, params} = req.body;
     let result;
     if(type==="POST"){
+        if(func === "acceptPrice"){
+            for (let i = 0; i < 6; i++) {
+                let temperature = Math.floor(Math.random() * (50 + 1 + 50) - 50)
+                params.push(temperature);
+                console.log(params)
+            }
+        }
         result = await postfunc(func,params);
     }else{
         result = await getfunc(func, params);
