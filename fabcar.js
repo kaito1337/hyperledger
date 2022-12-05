@@ -481,7 +481,7 @@ class FabCar extends Contract {
         let users = JSON.parse((await ctx.stub.getState('users')).toString());
         if (users[from].balance >= value) {
             users[from].balance -= value;
-            users[to].balance += value;
+            users[to].balance = Number(users[to].balance) + Number(value);
             result = true;
             await ctx.stub.putState('users', Buffer.from(JSON.stringify(users)));
         }
@@ -527,6 +527,12 @@ class FabCar extends Contract {
 
     async getProducts(ctx) {
         const products = (await ctx.stub.getState('products')).toString()
+        return products;
+    }
+
+    async getShopProducts(ctx, id){
+        let shops = JSON.parse((await ctx.stub.getState('shops')).toString());
+        const products = shops.find((el) => el.id == id).products
         return products;
     }
 
@@ -639,7 +645,7 @@ class FabCar extends Contract {
         }
         let counter = this.checkTemperatureOut(index);
         if (counter == 0) {
-            if (this.transfer(user, vendor, deliveryRequests[index].price)) {
+            if (this.transfer(ctx, user, vendor, deliveryRequests[index].price)) {
                 shops[shopIndex].products.push({ ...products[productIndex], "price": products[productIndex].price += products[productIndex].price * 0.5, "count": deliveryRequests[index].count });
                 deliveryRequests.splice(index, 1);
                 await ctx.stub.putState('shops', Buffer.from(JSON.stringify(shops)));
@@ -649,7 +655,7 @@ class FabCar extends Contract {
                 return JSON.stringify("Not enough money")
             }
         } else if (solution) {
-            if (this.transfer(user, vendor, deliveryRequests[index].price)) {
+            if (this.transfer(ctx, user, vendor, deliveryRequests[index].price)) {
                 shops[shopIndex].products.push({ ...products[productIndex], "price": products[productIndex].price += products[productIndex].price * 0.5, "count": deliveryRequests[index].count });
                 deliveryRequests.splice(index, 1);
                 await ctx.stub.putState('shops', Buffer.from(JSON.stringify(shops)))
@@ -692,7 +698,7 @@ class FabCar extends Contract {
         if (shopIndex == -1 || orderIndex == -1) {
             return JSON.stringify("Order or shop not found");
         }
-        if (solution && this.transfer(userIndex, indexShopUser, price)) {
+        if (solution && this.transfer(ctx, userIndex, indexShopUser, price)) {
             shops[shopIndex].orders[orderIndex].status = "Approved";
             shops[shopIndex].products[productIndex].count -= shops[shopIndex].orders[orderIndex].count;
             await ctx.stub.putState('shops', Buffer.from(JSON.stringify(shops)));
@@ -746,7 +752,7 @@ class FabCar extends Contract {
         const productIndex = shops[shopIndex].products.findIndex((el) => el.title == order.product);
         const indexShopUser = users.findIndex((el) => el.login == shops[shopIndex].login);
         const price = order.price;
-        if (solution && this.transfer(users[indexShopUser], users[userIndex], price)) {
+        if (solution && this.transfer(ctx, users[indexShopUser], users[userIndex], price)) {
             shops[shopIndex].products[productIndex].count += order.count;
             shops[shopIndex].returns.splice(returnIndex,1);
             await ctx.stub.putState('shops', Buffer.from(JSON.stringify(shops)));
